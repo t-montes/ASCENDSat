@@ -32,7 +32,7 @@ Welcome to the ASCENDSat repository! This repository hosts the codebase for ASCE
   - *camera*: MJY20FF or other references adaptable to OV5640 module
   - *micro-sd*: Integrated within the OV5640 camera module
   
-- `sensors/`: Contains the [`sensors.ino`](https://github.com/t-montes/CubeSat/blob/master/sensors/sensors.ino) file, which contains the combined code for all the sensors. This file measures all variables and prints a data stream in the same format as the sample file [`sample_stream.txt`](https://github.com/t-montes/CubeSat/blob/master/sensors/sample_stream.txt).
+- `sensors/`: Contains the [`sensors.ino`](https://github.com/t-montes/CubeSat/blob/master/sensors/sensors.ino) file, which contains the combined code for all the sensors. This file measures all variables and prints a data stream in the same format as the sample file [`sample_stream.csv`](https://github.com/t-montes/CubeSat/blob/master/sensors/sample_stream.csv).
 
 - `documentation/`: This directory contains documentation related to the _construction_ and _usage_ of ASCENDSat. 
 
