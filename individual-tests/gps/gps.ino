@@ -1,7 +1,7 @@
 #include "TinyGPSPlus.h"
 #include "SoftwareSerial.h"
 
-SoftwareSerial serial_connection(16,17);
+SoftwareSerial serial_connection_gps(16,17); // rxPin, txPin
 TinyGPSPlus gps;
 
 unsigned long lastConnectionTime = 0; // Variable to track the last connection time
@@ -10,13 +10,13 @@ int i = 0;
 
 void setup() {
   Serial.begin(9600);
-  serial_connection.begin(9600);
+  serial_connection_gps.begin(9600);
   Serial.println("GPS Start");
 }
 
 void loop() {
-  while (serial_connection.available()) {
-    gps.encode(serial_connection.read());
+  while (serial_connection_gps.available()) {
+    gps.encode(serial_connection_gps.read());
   }
 
   if (gps.location.isUpdated()) {
