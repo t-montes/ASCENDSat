@@ -52,6 +52,10 @@ int altitude;
 #define TX_PIN 1
 #define RX_PIN 3
 SoftwareSerial serial_connection(RX_PIN, TX_PIN);
+TinyGPSPlus gps;
+float latitude;
+float longitude;
+float altitude;
 
 /* -------------------- MEASURE FUNCTIONS -------------------- */
 
@@ -84,6 +88,14 @@ void measure_barometer() {
     pressure = bmp.readPressure();
     temperature = bmp.readTemperature();
     altitude = bmp.readAltitude(1013.25);
+}
+
+void measure_gps() {
+    if (gps.location.isUpdated()) {
+        latitude = gps.location.lat();
+        longitude = gps.location.lng();
+        altitude = gps.altitude.meters();
+    }
 }
 
 /* -------------------------- SETUP -------------------------- */
@@ -153,5 +165,7 @@ void setup() {
 }
 
 void loop() {
-    
+    while (serial_connection.available()) {
+        gps.encode(serial_connection.read());
+    }
 }
