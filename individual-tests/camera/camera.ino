@@ -20,12 +20,10 @@
 #include "soc/soc.h"           // Disable brownour problems
 #include "soc/rtc_cntl_reg.h"  // Disable brownour problems
 #include "driver/rtc_io.h"
-#include <EEPROM.h>            // read and write from flash memory
+#include <EEPROM.h> 
 
-// define the number of bytes you want to access
 #define EEPROM_SIZE 1
 
-// Pin definition for CAMERA_MODEL_AI_THINKER
 #define PWDN_GPIO_NUM     32
 #define RESET_GPIO_NUM    -1
 #define XCLK_GPIO_NUM      0
@@ -50,8 +48,6 @@ void setup() {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
  
   Serial.begin(115200);
-  //Serial.setDebugOutput(true);
-  //Serial.println();
   
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
@@ -76,7 +72,7 @@ void setup() {
   config.pixel_format = PIXFORMAT_JPEG; 
   
   if(psramFound()){
-    config.frame_size = FRAMESIZE_UXGA; // FRAMESIZE_ + QVGA|CIF|VGA|SVGA|XGA|SXGA|UXGA
+    config.frame_size = FRAMESIZE_UXGA;
     config.jpeg_quality = 10;
     config.fb_count = 2;
   } else {
@@ -85,14 +81,12 @@ void setup() {
     config.fb_count = 1;
   }
   
-  // Init Camera
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
     Serial.printf("Camera init failed with error 0x%x", err);
     return;
   }
   
-  //Serial.println("Starting SD Card");
   if(!SD_MMC.begin()){
     Serial.println("SD Card Mount Failed");
     return;
@@ -105,20 +99,16 @@ void setup() {
   }
     
   camera_fb_t * fb = NULL;
-  
-  // Take Picture with Camera
   fb = esp_camera_fb_get();  
   if(!fb) {
     Serial.println("Camera capture failed");
     return;
   }
-  // initialize EEPROM with predefined size
+
   EEPROM.begin(EEPROM_SIZE);
   pictureNumber = EEPROM.read(0) + 1;
 
-  // Path where new picture will be saved in SD Card
   String path = "/picture" + String(pictureNumber) +".jpg";
-
   fs::FS &fs = SD_MMC; 
   Serial.printf("Picture file name: %s\n", path.c_str());
   
@@ -127,7 +117,7 @@ void setup() {
     Serial.println("Failed to open file in writing mode");
   } 
   else {
-    file.write(fb->buf, fb->len); // payload (image), payload length
+    file.write(fb->buf, fb->len);
     Serial.printf("Saved file to path: %s\n", path.c_str());
     EEPROM.write(0, pictureNumber);
     EEPROM.commit();
@@ -135,11 +125,12 @@ void setup() {
   file.close();
   esp_camera_fb_return(fb); 
   
-  // Turns off the ESP32-CAM white on-board LED (flash) connected to GPIO 4
+  // Turn off the FLASH led
   pinMode(4, OUTPUT);
   digitalWrite(4, LOW);
   rtc_gpio_hold_en(GPIO_NUM_4);
-  
+
+  // Go to sleep mode  
   delay(2000);
   Serial.println("Going to sleep now");
   delay(2000);
