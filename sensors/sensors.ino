@@ -13,6 +13,14 @@
 #include "soc/rtc_cntl_reg.h"
 #include "driver/rtc_io.h"
 
+// Barometer
+#include <Adafruit_Sensor.h>
+#include "Adafruit_BMP280.h"
+
+// GPS
+#include "TinyGPSPlus.h"
+#include "SoftwareSerial.h"
+
 /* ------------------ CONSTANTS/VARIABLES ------------------ */
 
 // MicroSD and Camera in ESP32
@@ -33,6 +41,17 @@
 #define VSYNC_GPIO_NUM 25
 #define HREF_GPIO_NUM 23
 #define PCLK_GPIO_NUM 22
+
+// Barometer [BMP280]
+Adafruit_BMP280 bmp;
+float pressure;
+float temperature;
+int altitude;
+
+// GPS [GT-U7]
+#define TX_PIN 1
+#define RX_PIN 3
+SoftwareSerial serial_connection(RX_PIN, TX_PIN);
 
 /* -------------------- MEASURE FUNCTIONS -------------------- */
 
@@ -59,6 +78,12 @@ void take_and_save_picture() {
 
     digitalWrite(4, LOW);
     rtc_gpio_hold_en(GPIO_NUM_4);
+}
+
+void measure_barometer() {
+    pressure = bmp.readPressure();
+    temperature = bmp.readTemperature();
+    altitude = bmp.readAltitude(1013.25);
 }
 
 /* -------------------------- SETUP -------------------------- */
@@ -119,6 +144,12 @@ void setup() {
     }
 
     pinMode(4, OUTPUT);
+
+    // Barometer
+    bmp.begin();
+
+    // GPS
+    serial_connection.begin(9600);
 }
 
 void loop() {
