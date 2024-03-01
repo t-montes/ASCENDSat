@@ -8,13 +8,10 @@
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 #include "driver/rtc_io.h"
-#include <EEPROM.h> 
 
 /* ------------------- CONSTANTS/VARIABLES -------------------- */
 
 // MicroSD and Camera
-#define EEPROM_SIZE 1
-
 #define PWDN_GPIO_NUM     32
 #define RESET_GPIO_NUM    -1
 #define XCLK_GPIO_NUM      0
@@ -32,8 +29,6 @@
 #define VSYNC_GPIO_NUM    25
 #define HREF_GPIO_NUM     23
 #define PCLK_GPIO_NUM     22
-
-int pictureNumber = 0;
 
 /* -------------------- AUXILIAR FUNCTIONS -------------------- */
 
@@ -101,10 +96,7 @@ void setup() {
     return;
   }
 
-  EEPROM.begin(EEPROM_SIZE);
-  pictureNumber = EEPROM.read(0) + 1;
-
-  String path = "/picture" + String(pictureNumber) +".jpg";
+  String path = "/MYpicture.jpg";
   fs::FS &fs = SD_MMC; 
   Serial.printf("Picture file name: %s\n", path.c_str());
   
@@ -115,8 +107,6 @@ void setup() {
   else {
     file.write(fb->buf, fb->len);
     Serial.printf("Saved file to path: %s\n", path.c_str());
-    EEPROM.write(0, pictureNumber);
-    EEPROM.commit();
   }
   file.close();
   esp_camera_fb_return(fb); 
