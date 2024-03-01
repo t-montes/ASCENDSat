@@ -32,6 +32,23 @@
 
 /* -------------------- AUXILIAR FUNCTIONS -------------------- */
 
+void save_to_file(String filename, String data, char mode) {
+  File file;
+
+  if (mode == 'a') {
+    file = SD_MMC.open(filename, FILE_APPEND);
+  } else {
+    file = SD_MMC.open(filename, FILE_WRITE);
+  }
+
+  if (file) {
+    file.println(data);
+    file.close();
+    Serial.println("Data appended/written to file successfully!");
+  } else {
+    Serial.println("Failed to open file for writing/appending");
+  }
+}
 
 /* -------------------------- SETUP --------------------------- */
 
@@ -114,14 +131,19 @@ void setup() {
   // Turn off the FLASH led
   pinMode(4, OUTPUT);
   digitalWrite(4, LOW);
-  rtc_gpio_hold_en(GPIO_NUM_4);
 
-  // Go to sleep mode  
   delay(2000);
-  Serial.println("Going to sleep now");
-  delay(2000);
-  esp_deep_sleep_start();
-  Serial.println("This will never be printed");
+  //Serial.println("Going to sleep now");
+  //delay(2000);
+  //esp_deep_sleep_start();
+  //Serial.println("This will never be printed");
+
+  String filename = "/welcome.txt"; // Specify the filename
+  String data = "Welcome to CubeSat"; // Data to be saved
+  char mode = 'w'; // Specify the mode ('a' for append or 'w' for write)
+
+  save_to_file(filename,data,mode);
+
 }
 
 /* --------------------------- LOOP --------------------------- */
