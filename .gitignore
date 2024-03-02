@@ -1,2 +1,3 @@
 .vscode/
-libraries/*[^.zip]*
+/libraries/*
+!/libraries/*.zip
