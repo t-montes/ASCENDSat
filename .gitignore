@@ -1,3 +1,4 @@
 .vscode/
 /libraries/*
 !/libraries/*.zip
+.DS_STORE
