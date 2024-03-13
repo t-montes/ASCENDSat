@@ -1,117 +1,112 @@
-
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
 #include <Wire.h>
-float RateRoll, RatePitch, RateYaw;
-float RateCalibrationRoll, RateCalibrationPitch, RateCalibrationYaw;
-int RateCalibrationNumber;
-float AccX, AccY, AccZ;
-float AngleRoll, AnglePitch, AngleYaw;
-float elapsedTime, currentTime, previousTime;
-uint32_t LoopTimer;
-float KalmanAngleRoll=0, KalmanUncertaintyAngleRoll=2*2;
-float KalmanAnglePitch=0, KalmanUncertaintyAnglePitch=2*2;
-float Kalman1DOutput[]={0,0};
-void kalman_1d(float KalmanState, float KalmanUncertainty, float KalmanInput, float KalmanMeasurement) {
-  KalmanState=KalmanState+0.004*KalmanInput;
-  KalmanUncertainty=KalmanUncertainty + 0.004 * 0.004 * 4 * 4;
-  float KalmanGain=KalmanUncertainty * 1/(1*KalmanUncertainty + 3 * 3);
-  KalmanState=KalmanState+KalmanGain * (KalmanMeasurement-KalmanState);
-  KalmanUncertainty=(1-KalmanGain) * KalmanUncertainty;
-  Kalman1DOutput[0]=KalmanState; 
-  Kalman1DOutput[1]=KalmanUncertainty;
-}
-void gyro_signals(void) {
-  Wire.beginTransmission(0x68);
-  Wire.write(0x1A);
-  Wire.write(0x05);
-  Wire.endTransmission();
-  Wire.beginTransmission(0x68);
-  Wire.write(0x1C);
-  Wire.write(0x10);
-  Wire.endTransmission();
-  Wire.beginTransmission(0x68);
-  Wire.write(0x3B);
-  Wire.endTransmission(); 
-  Wire.requestFrom(0x68,6);
-  int16_t AccXLSB = Wire.read() << 8 | Wire.read();
-  int16_t AccYLSB = Wire.read() << 8 | Wire.read();
-  int16_t AccZLSB = Wire.read() << 8 | Wire.read();
-  Wire.beginTransmission(0x68);
-  Wire.write(0x1B); 
-  Wire.write(0x8);
-  Wire.endTransmission();     
-  Wire.beginTransmission(0x68);
-  Wire.write(0x43);
-  Wire.endTransmission();
-  Wire.requestFrom(0x68,6);
-  int16_t GyroX=Wire.read()<<8 | Wire.read();
-  int16_t GyroY=Wire.read()<<8 | Wire.read();
-  int16_t GyroZ=Wire.read()<<8 | Wire.read();
-  RateRoll=(float)GyroX/65.5;
-  RatePitch=(float)GyroY/65.5;
-  RateYaw=(float)GyroZ/65.5;
-  AccX=(float)AccXLSB/4096+0.01;
-  AccY=(float)AccYLSB/4096-0.01;
-  AccZ=(float)AccZLSB/4096-0.12;
-  AngleRoll=atan(AccY/sqrt(AccX*AccX+AccZ*AccZ))*1/(3.142/180);
-  AnglePitch=-atan(AccX/sqrt(AccY*AccY+AccZ*AccZ))*1/(3.142/180);
-}
-void setup() {
-  Serial.begin(57600);
-  pinMode(13, OUTPUT);
-  digitalWrite(13, HIGH);
-  Wire.setClock(400000);
-  Wire.begin();
-  delay(250);
-  Wire.beginTransmission(0x68); 
-  Wire.write(0x6B);
-  Wire.write(0x00);
-  Wire.endTransmission();
-  for (RateCalibrationNumber=0; RateCalibrationNumber<2000; RateCalibrationNumber ++) {
-    gyro_signals();
-    RateCalibrationRoll+=RateRoll;
-    RateCalibrationPitch+=RatePitch;
-    RateCalibrationYaw+=RateYaw;
-    delay(1);
+
+Adafruit_MPU6050 mpu;
+
+void setup(void) {
+  Serial.begin(115200);
+  while (!Serial)
+    delay(10);
+
+  Serial.println("Adafruit MPU6050 test!");
+
+  if (!mpu.begin()) {
+    Serial.println("Failed to find MPU6050 chip");
+    while (1) {
+      delay(10);
+    }
   }
-  RateCalibrationRoll/=2000;
-  RateCalibrationPitch/=2000;
-  RateCalibrationYaw/=2000;
-  LoopTimer=micros();
+  Serial.println("MPU6050 Found!");
+
+  mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
+  Serial.print("Accelerometer range set to: ");
+  switch (mpu.getAccelerometerRange()) {
+  case MPU6050_RANGE_2_G:
+    Serial.println("+-2G");
+    break;
+  case MPU6050_RANGE_4_G:
+    Serial.println("+-4G");
+    break;
+  case MPU6050_RANGE_8_G:
+    Serial.println("+-8G");
+    break;
+  case MPU6050_RANGE_16_G:
+    Serial.println("+-16G");
+    break;
+  }
+  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+  Serial.print("Gyro range set to: ");
+  switch (mpu.getGyroRange()) {
+  case MPU6050_RANGE_250_DEG:
+    Serial.println("+- 250 deg/s");
+    break;
+  case MPU6050_RANGE_500_DEG:
+    Serial.println("+- 500 deg/s");
+    break;
+  case MPU6050_RANGE_1000_DEG:
+    Serial.println("+- 1000 deg/s");
+    break;
+  case MPU6050_RANGE_2000_DEG:
+    Serial.println("+- 2000 deg/s");
+    break;
+  }
+
+  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
+  Serial.print("Filter bandwidth set to: ");
+  switch (mpu.getFilterBandwidth()) {
+  case MPU6050_BAND_260_HZ:
+    Serial.println("260 Hz");
+    break;
+  case MPU6050_BAND_184_HZ:
+    Serial.println("184 Hz");
+    break;
+  case MPU6050_BAND_94_HZ:
+    Serial.println("94 Hz");
+    break;
+  case MPU6050_BAND_44_HZ:
+    Serial.println("44 Hz");
+    break;
+  case MPU6050_BAND_21_HZ:
+    Serial.println("21 Hz");
+    break;
+  case MPU6050_BAND_10_HZ:
+    Serial.println("10 Hz");
+    break;
+  case MPU6050_BAND_5_HZ:
+    Serial.println("5 Hz");
+    break;
+  }
+
+  Serial.println("");
+  delay(100);
 }
+
 void loop() {
-  gyro_signals();
-  RateRoll-=RateCalibrationRoll;
-  RatePitch-=RateCalibrationPitch;
-  RateYaw-=RateCalibrationYaw;
-  previousTime = currentTime;
-  currentTime = millis();
-  elapsedTime = (currentTime - previousTime) /1000;
-  AngleYaw = AngleYaw + RateYaw*elapsedTime;
-  kalman_1d(KalmanAngleRoll, KalmanUncertaintyAngleRoll, RateRoll, AngleRoll);
-  KalmanAngleRoll=Kalman1DOutput[0]; 
-  KalmanUncertaintyAngleRoll=Kalman1DOutput[1];
-  kalman_1d(KalmanAnglePitch, KalmanUncertaintyAnglePitch, RatePitch, AnglePitch);
-  KalmanAnglePitch=Kalman1DOutput[0]; 
-  KalmanUncertaintyAnglePitch=Kalman1DOutput[1];
-  Serial.print("Acceleration X [g] ");
-  Serial.print(AccX);
-  Serial.print(" Acceleration Y [g]  ");
-  Serial.print(AccY);
-  Serial.print(" Acceleration Z [g]  ");
-  Serial.println(AccZ);
-  Serial.print("Rate Roll [°/s] ");
-  Serial.print(RateRoll);
-  Serial.print(" Rate Pitch [g]  ");
-  Serial.print(RatePitch);
-  Serial.print(" Rate Yaw [g]  ");
-  Serial.println(RateYaw);
-  Serial.print("Roll Angle [°] ");
-  Serial.print(KalmanAngleRoll);
-  Serial.print(" Pitch Angle [°] ");
-  Serial.print(KalmanAnglePitch);
-  Serial.print(" Yaw Angle [°] ");
-  Serial.println(AngleYaw);
-  while (micros() - LoopTimer < 4000);
-  LoopTimer=micros();
+
+  sensors_event_t a, g, temp;
+  mpu.getEvent(&a, &g, &temp);
+
+  Serial.print("Acceleration X: ");
+  Serial.print(a.acceleration.x);
+  Serial.print(", Y: ");
+  Serial.print(a.acceleration.y);
+  Serial.print(", Z: ");
+  Serial.print(a.acceleration.z);
+  Serial.println(" m/s^2");
+
+  Serial.print("Rotation X: ");
+  Serial.print(g.gyro.x);
+  Serial.print(", Y: ");
+  Serial.print(g.gyro.y);
+  Serial.print(", Z: ");
+  Serial.print(g.gyro.z);
+  Serial.println(" rad/s");
+
+  Serial.print("Temperature: ");
+  Serial.print(temp.temperature);
+  Serial.println(" degC");
+
+  Serial.println("");
   delay(500);
 }

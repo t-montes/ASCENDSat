@@ -1,32 +1,64 @@
+/* ------------------------ LIBRARIES ------------------------- */
+
+// General
+#include <Wire.h>
+#include "SPI.h"
+
+// MicroSD and Camera [OV2640]
 #include "esp_camera.h"
 #include "FS.h"
 #include "SD.h"
 #include "SPI.h"
 #include <TimeLib.h>
-
 #define CAMERA_MODEL_XIAO_ESP32S3
-
 #include "camera_pins.h"
 
+// Barometer [BMP280]
+#include <Adafruit_Sensor.h>
+#include "Adafruit_BMP280.h"
+
+/* ------------------- CONSTANTS/VARIABLES -------------------- */
+
+// MicroSD and Camera
 unsigned long lastCaptureTime = 0;
 int imageCount = 1;
-bool camera_sign = false;
-bool sd_sign = false;
+bool cameraStatus = false;
+bool sdStatus = false;
 
-void photo_save(const char * fileName) {
+// Barometer
+Adafruit_BMP280 bmp;
+float pressure = 0;
+float temperature = 0;
+int altitude = 0;
+
+/* -------------------- AUXILIAR FUNCTIONS -------------------- */
+
+/*
+ * savePhoto - Take a photo and save it to a file.
+ * @param fileName The name of the file
+ * @returns void
+ */
+void savePhoto(const char * fileName) {
   camera_fb_t *fb = esp_camera_fb_get();
   if (!fb) {
     Serial.println("Failed to get camera frame buffer");
     return;
   }
-  writeFile(SD, fileName, fb->buf, fb->len);
+  writeImage(SD, fileName, fb->buf, fb->len);
   
   esp_camera_fb_return(fb);
-  Serial.println("Photo saved to file");
+  Serial.printf("Saved picture: %s\r\n", fileName);
 }
 
-void writeFile(fs::FS &fs, const char * path, uint8_t * data, size_t len){
-    Serial.printf("Writing file: %s\r\n", path);
+/*
+ * writeImage - Saves image contents to a file.
+ * @param fs The filesystem
+ * @param path The path to the file
+ * @param data The image data
+ * @param len The length of the image (to check for errors)
+ */
+void writeImage(fs::FS &fs, const char * path, uint8_t * data, size_t len) {
+    Serial.printf("Writing image to: %s\r\n", path);
 
     File file = fs.open(path, FILE_WRITE);
     if(!file){
@@ -41,7 +73,13 @@ void writeFile(fs::FS &fs, const char * path, uint8_t * data, size_t len){
     file.close();
 }
 
-void appendFile(const char * path, const char * data) {
+/*
+ * appendData - Appends data to a file (used for sensors data).
+ * @param path The path to the file
+ * @param data The data to append
+ * @returns void
+ */
+void appendData(const char * path, const char * data) {
   File file = SD.open(path, FILE_APPEND);
   if (file) {
     file.println(data);
@@ -52,10 +90,21 @@ void appendFile(const char * path, const char * data) {
   }
 }
 
+/* --------------------- MEASURE FUNCTIONS --------------------- */
+
+void readBarometer() {
+    pressure = bmp.readPressure();
+    temperature = bmp.readTemperature();
+    altitude = bmp.readAltitude(1013.25);
+}
+
+/* -------------------------- SETUP --------------------------- */
+
 void setup() {
   Serial.begin(115200);
   while(!Serial);
 
+  // MicroSD and Camera
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
   config.ledc_timer = LEDC_TIMER_0;
@@ -99,14 +148,13 @@ void setup() {
     #endif
   }
 
-  // camera init
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
     Serial.printf("Camera init failed with error 0x%x", err);
     return;
   }
   
-  camera_sign = true;
+  cameraStatus = true;
 
   if(!SD.begin(21)){
     Serial.println("Card Mount Failed");
@@ -130,32 +178,51 @@ void setup() {
     Serial.println("UNKNOWN");
   }
 
-  sd_sign = true;
+  sdStatus = true;
 
   setTime(0);
 
-  Serial.println("Photos will begin every 5 seconds, please be ready.");
+  // Barometer
+	bmp.begin();
 }
 
+/* --------------------------- LOOP --------------------------- */
+
 void loop() {
-  if(camera_sign && sd_sign){
+  Serial.println("0000000000000000000");
+  Serial.println(pressure);
+  Serial.println(temperature);
+  Serial.println(altitude);
+
+  // 1. Reading stage
+  readBarometer();
+
+  Serial.println("1111111111111111111");
+  Serial.println(pressure);
+  Serial.println(temperature);
+  Serial.println(altitude);
+
+  // 2. Saving stage
+  if(cameraStatus && sdStatus){
     unsigned long now = millis();
   
+    // 2.1. Picture (only for testing)
     if ((now - lastCaptureTime) >= 5000) {
-      // Take photo
       char filename[32];
       sprintf(filename, "/image%d.jpg", imageCount);
-      photo_save(filename);
-      Serial.printf("Saved picture: %s\r\n", filename);
+      savePhoto(filename);
 
-      Serial.println("Photos will begin in one minute, please be ready.");
       imageCount++;
       lastCaptureTime = now;
     }
 
-    // Save to data file
-    char timeData[50];
-    sprintf(timeData, "Data was stored at time %02d:%02d:%02d", hour(), minute(), second());
-    appendFile("/data.txt", timeData);
+    // 2.2. Formatting
+    char dataString[50];
+    sprintf(dataString, "%02d:%02d:%02d,%.2f,%.2f,%.2f\r\n", hour(), minute(), second(), pressure, temperature, altitude);
+    Serial.print("Data: ");
+    Serial.println(dataString);
+
+    // 2.3. Appending to SD file
+    appendData("/data.txt", dataString);
   }
 }
