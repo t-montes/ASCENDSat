@@ -13,9 +13,9 @@ void setup(void) {
 
   if (!mpu.begin()) {
     Serial.println("Failed to find MPU6050 chip");
-    while (1) {
-      delay(10);
-    }
+    //while (1) {
+    //  delay(10);
+    //}
   }
   Serial.println("MPU6050 Found!");
 
