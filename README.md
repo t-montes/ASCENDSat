@@ -13,10 +13,11 @@ Welcome to the ASCENDSat repository! This repository hosts the codebase for ASCE
 ```
 |── individual-tests/
 | ├── accelerometer/accelerometer.ino
+| ├── magnetometer/magnetometer.ino
 | ├── barometer/barometer.ino
-| ├── camera/camera.ino
 | ├── gps/gps.ino
-| └── micro-sd/micro-sd.ino
+| ├── micro-sd/micro-sd.ino
+| └── multiple-swserial/multiple-swserial.ino
 |
 |── sensors/
 | ├── sensors.ino
@@ -25,12 +26,13 @@ Welcome to the ASCENDSat repository! This repository hosts the codebase for ASCE
 └── documentation/
 ```
 
-- `individual-tests/`: This directory contains individual test codes for each sensor required by the mission. Each sensor has its subdirectory containing the test code. The sensors utilized are:
+- `individual-tests/`: This directory contains individual test codes for each sensor/component the mission requires. Each sensor has its subdirectory containing the test code. The sensors utilized are:
   - *accelerometer and gyroscope*: [MPU-6050](https://invensense.tdk.com/wp-content/uploads/2015/02/MPU-6000-Datasheet1.pdf)
+  - *magnetometer*: [HMC5883L](https://cdn-shop.adafruit.com/datasheets/HMC5883L_3-Axis_Digital_Compass_IC.pdf)
   - *barometer*: [BMP280](https://cdn-shop.adafruit.com/datasheets/BST-BMP280-DS001-11.pdf)
   - *gps*: [GT-U7](https://images-na.ssl-images-amazon.com/images/I/91tuvtrO2jL.pdf)
-  - *camera*: MJY20FF or other references adaptable to OV5640 module
-  - *micro-sd*: Integrated within the OV5640 camera module
+  - *micro-sd*: [HW-125](https://components101.com/modules/micro-sd-card-module-pinout-features-datasheet-alternatives)
+  - there's also a file called [`multiple-swserial.ino`](https://github.com/t-montes/CubeSat/blob/master/individual-tests/multiple-swserial/multiple-swserial.ino) which tests the ESP32 ability to use both Serial pins (RX/TX) simoultaneously, this test is done by connecting two GPS to the ESP and the MicroSD card for validating and debugging.
   
 - `sensors/`: Contains the [`sensors.ino`](https://github.com/t-montes/CubeSat/blob/master/sensors/sensors.ino) file, which contains the combined code for all the sensors. This file measures all variables and prints a data stream in the same format as the sample file [`sample_stream.csv`](https://github.com/t-montes/CubeSat/blob/master/sensors/sample_stream.csv).
 
