@@ -1,6 +1,34 @@
 #include "FS.h"
 #include "SD.h"
 #include "SPI.h"
+#include "TinyGPSPlus.h"
+#include "SoftwareSerial.h"
+
+// Pin definitions
+#define SD_CS_PIN 5
+#define RX_PIN 16
+#define TX_PIN 17
+
+// GPS setup
+SoftwareSerial serial_connection(RX_PIN, TX_PIN); // rxPin, txPin
+TinyGPSPlus gps;
+
+// Function declarations
+void createDir(fs::FS &fs, const char * path);
+void readFile(fs::FS &fs, const char * path);
+void writeFile(fs::FS &fs, const char * path, const char * message);
+void appendFile(fs::FS &fs, const char * path, const char * message);
+void testFileIO(fs::FS &fs, const char * path);
+void setupSD();
+void setupGPS();
+void readGPSData();
+void logData();
+
+// Global variables
+unsigned long lastConnectionTime = 0; // Variable to track the last connection time
+const unsigned long connectionInterval = 1000; // Interval between connection checks in milliseconds
+int connectionAttempts = 0;
+float latitude, longitude, altitude;
 
 void createDir(fs::FS &fs, const char * path){
   if(fs.mkdir(path)){
@@ -91,9 +119,8 @@ void testFileIO(fs::FS &fs, const char * path){
   file.close();
 }
 
-void setup(){
-  Serial.begin(115200);
-  if(!SD.begin(5)){
+void setupSD() {
+  if(!SD.begin(SD_CS_PIN)){
     Serial.println("Card Mount Failed");
     return;
   }
@@ -107,13 +134,68 @@ void setup(){
   uint64_t cardSize = SD.cardSize() / (1024 * 1024);
   //Serial.printf("SD Card Size: %lluMB\n", cardSize);
 
-  writeFile(SD, "/hello.txt", "Hello ");
-  appendFile(SD, "/hello.txt", "World!\n");
+  // Create the measures.csv file with headers
+  writeFile(SD, "/measures.csv", "time;accx;accy;accz;roll;yaw;pitch;rollg;yawg;pitchg;pressure;altitud;altitudegps;lat;lon;camera;vbat;vpv\n");
   testFileIO(SD, "/test.txt");
   //Serial.printf("Total space: %lluMB\n", SD.totalBytes() / (1024 * 1024));
   //Serial.printf("Used space: %lluMB\n", SD.usedBytes() / (1024 * 1024));
 }
 
-void loop(){
-  
+void setupGPS() {
+  serial_connection.begin(9600);
+  Serial.println("GPS Start");
+}
+
+void setup() {
+  Serial.begin(115200);
+  setupSD();
+  setupGPS();
+}
+
+void readGPSData() {
+  while (serial_connection.available()) {
+    gps.encode(serial_connection.read());
+  }
+
+  if (gps.location.isUpdated()) {
+    connectionAttempts = 0;
+    latitude = gps.location.lat();
+    longitude = gps.location.lng();
+    altitude = gps.altitude.meters();
+  } else {
+    if (millis() - lastConnectionTime >= connectionInterval) {
+      connectionAttempts++;
+      Serial.println("connecting... (" + String(connectionAttempts) + ")");
+      lastConnectionTime = millis(); // Update the last connection time
+    }
+  }
+}
+
+void logData() {
+  // Get current time
+  unsigned long currentTime = millis();
+
+  // Placeholder values for other sensors
+  float accx = 0.0, accy = 0.0, accz = 0.0;
+  float roll = 0.0, yaw = 0.0, pitch = 0.0;
+  float rollg = 0.0, yawg = 0.0, pitchg = 0.0;
+  float pressure = 0.0, altitud = 0.0;
+  float camera = 0.0, vbat = 0.0, vpv = 0.0;
+
+  String dataString = String(currentTime) + ";" +
+                      String(accx) + ";" + String(accy) + ";" + String(accz) + ";" +
+                      String(roll) + ";" + String(yaw) + ";" + String(pitch) + ";" +
+                      String(rollg) + ";" + String(yawg) + ";" + String(pitchg) + ";" +
+                      String(pressure) + ";" + String(altitud) + ";" +
+                      String(altitude) + ";" + String(latitude, 6) + ";" +
+                      String(longitude, 6) + ";" + String(camera) + ";" +
+                      String(vbat) + ";" + String(vpv) + "\n";
+
+  Serial.print(dataString);
+  appendFile(SD, "/measures.csv", dataString.c_str());
+}
+
+void loop() {
+  readGPSData();
+  logData();
 }
