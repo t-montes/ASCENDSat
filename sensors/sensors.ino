@@ -2,6 +2,7 @@
 #include "SoftwareSerial.h"
 #include <Wire.h>
 #include <SPI.h>
+#include <MechaQMC5883.h>
 #include <Adafruit_BMP280.h>
 
 #define SEP ";"
@@ -13,6 +14,7 @@
 SoftwareSerial serial_connection(16,17); // rxPin, txPin
 TinyGPSPlus gps;
 Adafruit_BMP280 bmp;
+MechaQMC5883 qmc;
 
 unsigned long now = 0;
 unsigned long lastConnectionTime = 0;
@@ -37,12 +39,22 @@ void setup() {
     Serial.println(F("Could not find a valid BMP280 sensor, check wiring or try a different address!"));
     while (1) delay(10);
   }
-
   bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
                   Adafruit_BMP280::SAMPLING_X2,     /* Temp. oversampling */
                   Adafruit_BMP280::SAMPLING_X16,    /* Pressure oversampling */
                   Adafruit_BMP280::FILTER_X16,      /* Filtering. */
                   Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
+
+  Wire.begin();
+  qmc.init();
+}
+
+void magnetometerRead() {
+  int x, y, z;
+  qmc.read(&x, &y, &z);
+  rollg = String(x);
+  yawg = String(y);
+  pitchg = String(z);
 }
 
 void barometerRead() {
@@ -75,16 +87,16 @@ void loop() {
       if (i != 1) Serial.println("GPS connecting... (" + String(i) + ")");
 
       barometerRead();
+      magnetometerRead();
+
       data = String(now) + SEP +
              // accelerometer
-             // magnetometer
+             rollg + SEP + yawg + SEP + pitchg + SEP +
              temperature + SEP + pressure + SEP + altitude + SEP +
              altitudegps + SEP + lat + SEP + lon;
-      Serial.println(data);
 
       lastConnectionTime = now;
+      Serial.println(data);
     }
   }
 }
-
-
