@@ -3,11 +3,13 @@
 #include "SPI.h"
 #include "TinyGPSPlus.h"
 #include "SoftwareSerial.h"
+#include <EEPROM.h>
 
 // Pin definitions
 #define SD_CS_PIN 5
 #define RX_PIN 16
 #define TX_PIN 17
+#define EEPROM_ADDRESS 0 // EEPROM address to store the file counter
 
 // GPS setup
 SoftwareSerial serial_connection(RX_PIN, TX_PIN); // rxPin, txPin
@@ -18,46 +20,48 @@ void createDir(fs::FS &fs, const char * path);
 void readFile(fs::FS &fs, const char * path);
 void writeFile(fs::FS &fs, const char * path, const char * message);
 void appendFile(fs::FS &fs, const char * path, const char * message);
-void testFileIO(fs::FS &fs, const char * path);
 void setupSD();
 void setupGPS();
 void readGPSData();
 void logData();
+int readFileCounter();
+void incrementFileCounter();
 
 // Global variables
 unsigned long lastConnectionTime = 0; // Variable to track the last connection time
 const unsigned long connectionInterval = 1000; // Interval between connection checks in milliseconds
 int connectionAttempts = 0;
-float latitude, longitude, altitude;
+float latitude = 0.0, longitude = 0.0, altitude = 0.0;
+String currentFileName; // Variable to store the current file name
 
-void createDir(fs::FS &fs, const char * path){
-  if(fs.mkdir(path)){
+void createDir(fs::FS &fs, const char * path) {
+  if (fs.mkdir(path)) {
     //Serial.println("Dir created");
   } else {
     //Serial.println("mkdir failed");
   }
 }
 
-void readFile(fs::FS &fs, const char * path){
+void readFile(fs::FS &fs, const char * path) {
   File file = fs.open(path);
-  if(!file){
+  if (!file) {
     Serial.println("Failed to open file for reading");
     return;
   }
 
-  while(file.available()){
+  while (file.available()) {
     Serial.write(file.read());
   }
   file.close();
 }
 
-void writeFile(fs::FS &fs, const char * path, const char * message){
+void writeFile(fs::FS &fs, const char * path, const char * message) {
   File file = fs.open(path, FILE_WRITE);
-  if(!file){
+  if (!file) {
     //Serial.println("Failed to open file for writing");
     return;
   }
-  if(file.print(message)){
+  if (file.print(message)) {
     //Serial.println("File written");
   } else {
     //Serial.println("Write failed");
@@ -65,13 +69,13 @@ void writeFile(fs::FS &fs, const char * path, const char * message){
   file.close();
 }
 
-void appendFile(fs::FS &fs, const char * path, const char * message){
+void appendFile(fs::FS &fs, const char * path, const char * message) {
   File file = fs.open(path, FILE_APPEND);
-  if(!file){
+  if (!file) {
     //Serial.println("Failed to open file for appending");
     return;
   }
-  if(file.print(message)){
+  if (file.print(message)) {
     //Serial.println("Message appended");
   } else {
     //Serial.println("Append failed");
@@ -79,66 +83,30 @@ void appendFile(fs::FS &fs, const char * path, const char * message){
   file.close();
 }
 
-void testFileIO(fs::FS &fs, const char * path){
-  File file = fs.open(path);
-  static uint8_t buf[512];
-  size_t len = 0;
-  uint32_t start = millis();
-  uint32_t end = start;
-  if(file){
-    len = file.size();
-    size_t flen = len;
-    start = millis();
-    while(len){
-      size_t toRead = len;
-      if(toRead > 512){
-        toRead = 512;
-      }
-      file.read(buf, toRead);
-      len -= toRead;
-    }
-    end = millis() - start;
-    //Serial.printf("%u bytes read for %u ms\n", flen, end);
-    file.close();
-  } else {
-    //Serial.println("Failed to open file for reading");
-  }
-
-  file = fs.open(path, FILE_WRITE);
-  if(!file){
-    //Serial.println("Failed to open file for writing");
-    return;
-  }
-
-  size_t i;
-  start = millis();
-  for(i=0; i<2048; i++){
-    file.write(buf, 512);
-  }
-  end = millis() - start;
-  file.close();
-}
-
 void setupSD() {
-  if(!SD.begin(SD_CS_PIN)){
+  if (!SD.begin(SD_CS_PIN)) {
     Serial.println("Card Mount Failed");
     return;
   }
   uint8_t cardType = SD.cardType();
 
-  if(cardType == CARD_NONE){
+  if (cardType == CARD_NONE) {
     Serial.println("No SD card attached");
     return;
   }
 
   uint64_t cardSize = SD.cardSize() / (1024 * 1024);
-  //Serial.printf("SD Card Size: %lluMB\n", cardSize);
 
-  // Create the measures.csv file with headers
-  writeFile(SD, "/measures.csv", "time;accx;accy;accz;roll;yaw;pitch;rollg;yawg;pitchg;pressure;altitud;altitudegps;lat;lon;camera;vbat;vpv\n");
-  testFileIO(SD, "/test.txt");
-  //Serial.printf("Total space: %lluMB\n", SD.totalBytes() / (1024 * 1024));
-  //Serial.printf("Used space: %lluMB\n", SD.usedBytes() / (1024 * 1024));
+  int fileCounter = readFileCounter();
+  currentFileName = "/measures" + String(fileCounter) + ".csv";
+  writeFile(SD, currentFileName.c_str(), "time;accx;accy;accz;roll;yaw;pitch;rollg;yawg;pitchg;pressure;altitud;altitudegps;lat;lon;camera;vbat;vpv\n");
+
+  Serial.printf("Writing to %11u\n", currentFileName);
+
+  Serial.printf("Total space: %lluMB\n", SD.totalBytes() / (1024 * 1024));
+  Serial.printf("Used space: %lluMB\n", SD.usedBytes() / (1024 * 1024));
+
+  incrementFileCounter();
 }
 
 void setupGPS() {
@@ -148,27 +116,18 @@ void setupGPS() {
 
 void setup() {
   Serial.begin(115200);
+  EEPROM.begin(512); // Initialize EEPROM
   setupSD();
   setupGPS();
 }
 
 void readGPSData() {
-  while (serial_connection.available()) {
-    gps.encode(serial_connection.read());
-  }
-
-  if (gps.location.isUpdated()) {
-    connectionAttempts = 0;
-    latitude = gps.location.lat();
-    longitude = gps.location.lng();
-    altitude = gps.altitude.meters();
-  } else {
-    if (millis() - lastConnectionTime >= connectionInterval) {
-      connectionAttempts++;
-      Serial.println("connecting... (" + String(connectionAttempts) + ")");
-      lastConnectionTime = millis(); // Update the last connection time
-    }
-  }
+  connectionAttempts = 0;
+  latitude = gps.location.lat();
+  longitude = gps.location.lng();
+  altitude = gps.altitude.meters();
+  Serial.print("Altitude: ");
+  Serial.println(altitude);
 }
 
 void logData() {
@@ -187,15 +146,40 @@ void logData() {
                       String(roll) + ";" + String(yaw) + ";" + String(pitch) + ";" +
                       String(rollg) + ";" + String(yawg) + ";" + String(pitchg) + ";" +
                       String(pressure) + ";" + String(altitud) + ";" +
-                      String(altitude) + ";" + String(latitude, 6) + ";" +
+                      String(altitude, 2) + ";" + String(latitude, 6) + ";" +
                       String(longitude, 6) + ";" + String(camera) + ";" +
                       String(vbat) + ";" + String(vpv) + "\n";
 
   Serial.print(dataString);
-  appendFile(SD, "/measures.csv", dataString.c_str());
+  appendFile(SD, currentFileName.c_str(), dataString.c_str());
+}
+
+int readFileCounter() {
+  return EEPROM.read(EEPROM_ADDRESS);
+}
+
+void incrementFileCounter() {
+  int fileCounter = readFileCounter();
+  fileCounter++;
+  EEPROM.write(EEPROM_ADDRESS, fileCounter);
+  EEPROM.commit();
 }
 
 void loop() {
-  readGPSData();
+  while (serial_connection.available()) {
+    gps.encode(serial_connection.read());
+  }
+  if (gps.location.isUpdated()) {
+    readGPSData();
+  } else {
+    if (millis() - lastConnectionTime >= connectionInterval) {
+      connectionAttempts++;
+      Serial.println("connecting... (" + String(connectionAttempts) + ")");
+      lastConnectionTime = millis(); // Update the last connection time
+    }
+  }
+
   logData();
+
+  delay(500);
 }

@@ -117,48 +117,6 @@ void deleteFile(fs::FS &fs, const char * path){
   }
 }
 
-void testFileIO(fs::FS &fs, const char * path){
-  File file = fs.open(path);
-  static uint8_t buf[512];
-  size_t len = 0;
-  uint32_t start = millis();
-  uint32_t end = start;
-  if(file){
-    len = file.size();
-    size_t flen = len;
-    start = millis();
-    while(len){
-      size_t toRead = len;
-      if(toRead > 512){
-        toRead = 512;
-      }
-      file.read(buf, toRead);
-      len -= toRead;
-    }
-    end = millis() - start;
-    Serial.printf("%u bytes read for %u ms\n", flen, end);
-    file.close();
-  } else {
-    Serial.println("Failed to open file for reading");
-  }
-
-
-  file = fs.open(path, FILE_WRITE);
-  if(!file){
-    Serial.println("Failed to open file for writing");
-    return;
-  }
-
-  size_t i;
-  start = millis();
-  for(i=0; i<2048; i++){
-    file.write(buf, 512);
-  }
-  end = millis() - start;
-  Serial.printf("%u bytes written for %u ms\n", 2048 * 512, end);
-  file.close();
-}
-
 void setup(){
   Serial.begin(115200);
   if(!SD.begin(5)){
@@ -186,22 +144,40 @@ void setup(){
   uint64_t cardSize = SD.cardSize() / (1024 * 1024);
   Serial.printf("SD Card Size: %lluMB\n", cardSize);
 
+  // Initial directory listing and operations can be removed or kept as needed
   listDir(SD, "/", 0);
-  createDir(SD, "/mydir");
-  listDir(SD, "/", 0);
-  removeDir(SD, "/mydir");
-  listDir(SD, "/", 2);
-  writeFile(SD, "/hello.txt", "Hello ");
-  appendFile(SD, "/hello.txt", "World!\n");
-  readFile(SD, "/hello.txt");
-  deleteFile(SD, "/foo.txt");
-  renameFile(SD, "/hello.txt", "/foo.txt");
-  readFile(SD, "/foo.txt");
-  testFileIO(SD, "/test.txt");
-  Serial.printf("Total space: %lluMB\n", SD.totalBytes() / (1024 * 1024));
-  Serial.printf("Used space: %lluMB\n", SD.usedBytes() / (1024 * 1024));
 }
 
 void loop(){
+  if (Serial.available() > 0) {
+    String command = Serial.readStringUntil('\n');
+    command.trim();
+    int spaceIndex = command.indexOf(' ');
+    String action = command.substring(0, spaceIndex);
+    String parameter = command.substring(spaceIndex + 1);
 
+    if (action.equalsIgnoreCase("LIST")) {
+      listDir(SD, parameter.c_str(), 0);
+    } else if (action.equalsIgnoreCase("READ")) {
+      readFile(SD, parameter.c_str());
+    } else if (action.equalsIgnoreCase("DELETE")) {
+      deleteFile(SD, parameter.c_str());
+    } else if (action.equalsIgnoreCase("CREATE")) {
+      writeFile(SD, parameter.c_str(), "");
+    } else if (action.equalsIgnoreCase("APPEND")) {
+      // Assume the parameter is in the form "filename content"
+      int separatorIndex = parameter.indexOf(' ');
+      String filename = parameter.substring(0, separatorIndex);
+      String content = parameter.substring(separatorIndex + 1);
+      appendFile(SD, filename.c_str(), content.c_str());
+    } else if (action.equalsIgnoreCase("RENAME")) {
+      // Assume the parameter is in the form "oldname newname"
+      int separatorIndex = parameter.indexOf(' ');
+      String oldName = parameter.substring(0, separatorIndex);
+      String newName = parameter.substring(separatorIndex + 1);
+      renameFile(SD, oldName.c_str(), newName.c_str());
+    } else {
+      Serial.println("Invalid command");
+    }
+  }
 }
