@@ -1,6 +1,8 @@
 #include "TinyGPSPlus.h"
 #include "SoftwareSerial.h"
 
+#define SEP ";"
+
 SoftwareSerial serial_connection(16,17); // rxPin, txPin
 TinyGPSPlus gps;
 
@@ -8,6 +10,7 @@ unsigned long now = 0;
 unsigned long lastConnectionTime = 0;
 const unsigned long connectionInterval = 1000;
 int i = 0;
+String data;
 
 String accx = "0.0", accy = "0.0", accz = "0.0", roll = "0.0", yaw = "0.0", pitch = "0.0"; // accelerometer
 String rollg = "0.0", yawg = "0.0", pitchg = "0.0"; // magnetometer
@@ -26,20 +29,24 @@ void gpsRead() {
   altitudegps = String(gps.altitude.meters());
   lat = String(gps.location.lat(), 6);
   lon = String(gps.location.lng(), 6);
-
-  Serial.println(altitudegps + ";" + lat + ";" + lon);
 }
 
 void loop() {
   now = millis();
-  while (serial_connection.available()) {gps.encode(serial_connection.read());}
+  while (serial_connection.available()) 
+    gps.encode(serial_connection.read());
 
-  if (gps.location.isUpdated()) {
-    gpsRead();
-  } else {
+  if (gps.location.isUpdated()) gpsRead();
+  else {
     if (now - lastConnectionTime >= connectionInterval) {
       i++;
-      Serial.println("connecting... ("+String(i)+")");
+      if (i != 1) Serial.println("GPS connecting... ("+String(i)+")");
+
+      data = String(now) + SEP +
+             altitudegps + SEP + lat + SEP + lon
+      ;
+
+      Serial.println(data);
       lastConnectionTime = now;
     }
   }
