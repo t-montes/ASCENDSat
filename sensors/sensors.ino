@@ -1,188 +1,191 @@
-#include <Wire.h>
-#include <BMP280_DEV.h>
-#include <MechaQMC5883.h>
-#include <Adafruit_MPU6050.h>
-#include <Adafruit_Sensor.h>
 #include "TinyGPSPlus.h"
 #include "SoftwareSerial.h"
+#include <Wire.h>
+#include <SPI.h>
+#include <MechaQMC5883.h>
+#include <Adafruit_BMP280.h>
 
-#define I2C_SDA 21
-#define I2C_SCL 22
-#define RX_PIN 16
-#define TX_PIN 17
-
-#define BMP280_ADDRESS 0x76
-#define HMC5883L_ADDRESS 0x0D
-
-BMP280_DEV bmp(I2C_SDA, I2C_SCL);
-MechaQMC5883 qmc;
-Adafruit_MPU6050 mpu;
-
-float temperature, pressure, altitude;
+#define SEP ";"
+#define BMP_SCK  (13)
+#define BMP_MISO (12)
+#define BMP_MOSI (11)
+#define BMP_CS   (10)
 
 SoftwareSerial serial_connection(16,17); // rxPin, txPin
 TinyGPSPlus gps;
-unsigned long lastConnectionTime = 0; // Variable to track the last connection time
-const unsigned long connectionInterval = 1000; // Interval between connection checks in milliseconds
+Adafruit_BMP280 bmp;
+MechaQMC5883 qmc;
+
+unsigned long now = 0;
+unsigned long lastConnectionTime = 0;
+const unsigned long connectionInterval = 1000;
 int i = 0;
+String data;
+
+float RateRoll, RatePitch, RateYaw;
+float RateCalibrationRoll, RateCalibrationPitch, RateCalibrationYaw;
+int RateCalibrationNumber;
+int AccCalibrationNumber;
+float AccX, AccY, AccZ;
+float AccXCalibration, AccYCalibration, AccZCalibration;
+float AngleRoll, AnglePitch, AngleYaw;
+
+int mx_bias=-287;
+int my_bias=239;
+int mz_bias=275;
+
+String accx = "0.0", accy = "0.0", accz = "0.0", roll = "0.0", yaw = "0.0", pitch = "0.0"; // accelerometer
+String rollg = "0.0", yawg = "0.0", pitchg = "0.0"; // magnetometer
+String pressure = "0.0", altitude = "0.0", temperature = "0.0"; // barometer
+String altitudegps = "0.0", lat = "0.0", lon = "0.0"; // gps
+String camera = "0.0", vbat = "0.0", vpv = "0.0"; // own
 
 void setup() {
-  Serial.begin(115200);
-  Wire.begin(I2C_SDA, I2C_SCL);
-
-  // BMP280 setup
-  Serial.println("Initializing BMP280...");
-  if (!bmp.begin(BMP280_ADDRESS)) {
-    Serial.println("Failed to find BMP280 sensor");
-  }
-  bmp.setTimeStandby(TIME_STANDBY_2000MS);
-  bmp.startNormalConversion();
-
-  // HMC5883L setup
-  Serial.println("Initializing HMC5883L...");
-  qmc.init();
-
-  // MPU6050 setup
-  Serial.println("Initializing MPU6050...");
-  if (!mpu.begin()) {
-    Serial.println("Failed to find MPU6050 sensor");
-  }
-
-  // GPS setup
+  Serial.println("Init");
+  Serial.begin(9600);
   serial_connection.begin(9600);
+  Serial.println("GPS Start");
 
-  mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
-  Serial.print("Accelerometer range set to: ");
-  switch (mpu.getAccelerometerRange()) {
-  case MPU6050_RANGE_2_G:
-    Serial.println("+-2G");
-    break;
-  case MPU6050_RANGE_4_G:
-    Serial.println("+-4G");
-    break;
-  case MPU6050_RANGE_8_G:
-    Serial.println("+-8G");
-    break;
-  case MPU6050_RANGE_16_G:
-    Serial.println("+-16G");
-    break;
+  Serial.println(F("BMP280 test"));
+  unsigned status = bmp.begin(0x76);
+  if (!status) {
+    Serial.println(F("Could not find a valid BMP280 sensor, check wiring or try a different address!"));
+    //while (1) delay(10);
   }
-  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
-  Serial.print("Gyro range set to: ");
-  switch (mpu.getGyroRange()) {
-  case MPU6050_RANGE_250_DEG:
-    Serial.println("+- 250 deg/s");
-    break;
-  case MPU6050_RANGE_500_DEG:
-    Serial.println("+- 500 deg/s");
-    break;
-  case MPU6050_RANGE_1000_DEG:
-    Serial.println("+- 1000 deg/s");
-    break;
-  case MPU6050_RANGE_2000_DEG:
-    Serial.println("+- 2000 deg/s");
-    break;
-  }
+  bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
+                  Adafruit_BMP280::SAMPLING_X2,     /* Temp. oversampling */
+                  Adafruit_BMP280::SAMPLING_X16,    /* Pressure oversampling */
+                  Adafruit_BMP280::FILTER_X16,      /* Filtering. */
+                  Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
 
-  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
-  Serial.print("Filter bandwidth set to: ");
-  switch (mpu.getFilterBandwidth()) {
-  case MPU6050_BAND_260_HZ:
-    Serial.println("260 Hz");
-    break;
-  case MPU6050_BAND_184_HZ:
-    Serial.println("184 Hz");
-    break;
-  case MPU6050_BAND_94_HZ:
-    Serial.println("94 Hz");
-    break;
-  case MPU6050_BAND_44_HZ:
-    Serial.println("44 Hz");
-    break;
-  case MPU6050_BAND_21_HZ:
-    Serial.println("21 Hz");
-    break;
-  case MPU6050_BAND_10_HZ:
-    Serial.println("10 Hz");
-    break;
-  case MPU6050_BAND_5_HZ:
-    Serial.println("5 Hz");
-    break;
-  }
+  Wire.begin();
+  qmc.init();
+  Wire.setClock(400000);
+  Wire.begin();
+  delay(250);
+  Wire.beginTransmission(0x68); 
+  Wire.write(0x6B);
+  Wire.write(0x00);
+  Wire.endTransmission();
+}
 
-  Serial.println("Initialization complete.");
-  delay(100);
+void accelerometerRead(){
+  Wire.beginTransmission(0x68);
+  Wire.write(0x1A);
+  Wire.write(0x05);
+  Wire.endTransmission();
+  Wire.beginTransmission(0x68);
+  Wire.write(0x1C);
+  Wire.write(0x10);
+  Wire.endTransmission();
+  Wire.beginTransmission(0x68);
+  Wire.write(0x3B);
+  Wire.endTransmission(); 
+  Wire.requestFrom(0x68,6);
+  int16_t AccXLSB = Wire.read() << 8 | Wire.read();
+  int16_t AccYLSB = Wire.read() << 8 | Wire.read();
+  int16_t AccZLSB = Wire.read() << 8 | Wire.read();
+  Wire.beginTransmission(0x68);
+  Wire.write(0x1B); 
+  Wire.write(0x8);
+  Wire.endTransmission();     
+  Wire.beginTransmission(0x68);
+  Wire.write(0x43);
+  Wire.endTransmission();
+  Wire.requestFrom(0x68,6);
+  int16_t GyroX=Wire.read()<<8 | Wire.read();
+  int16_t GyroY=Wire.read()<<8 | Wire.read();
+  int16_t GyroZ=Wire.read()<<8 | Wire.read();
+  RateRoll=(float)GyroX/65.5;
+  RatePitch=(float)GyroY/65.5;
+  RateYaw=(float)GyroZ/65.5;
+  AccX=(float)AccXLSB/4096;//+0.01;
+  AccY=(float)AccYLSB/4096;//-0.01;
+  AccZ=(float)AccZLSB/4096;//-0.12;
+  AngleRoll=atan(AccY/sqrt(AccX*AccX+AccZ*AccZ))*1/(3.142/180);
+  AnglePitch=-atan(AccX/sqrt(AccY*AccY+AccZ*AccZ))*1/(3.142/180);
+  roll = String(AngleRoll);
+  pitch = String(AnglePitch);
+
+  accx = String(AccX);
+  accy = String(AccY);
+  accz = String(AccZ);
+}
+
+void accelerometerCalibration(){
+  for (RateCalibrationNumber=0; RateCalibrationNumber<2000; RateCalibrationNumber ++) {
+    accelerometerRead();
+    RateCalibrationRoll+=RateRoll;
+    RateCalibrationPitch+=RatePitch;
+    RateCalibrationYaw+=RateYaw;
+    AccXCalibration+=AccX;
+    AccYCalibration+=AccY;
+    AccZCalibration+=AccZ;
+    delay(1);
+  }
+  RateCalibrationRoll/=4000;
+  RateCalibrationPitch/=4000;
+  RateCalibrationYaw/=4000;
+  AccXCalibration/=4000;
+  AccYCalibration/=4000;
+  AccZCalibration/=4000;
+}
+
+void magnetometerRead() {
+  int x, y, z;
+  qmc.read(&x, &y, &z);
+  rollg = String(x);
+  yawg = String(y);
+  pitchg = String(z);
+
+  AngleYaw = atan2(y,x)*(180/3.1415);
+  yaw = String(AngleYaw);
+}
+
+void barometerRead() {
+  temperature = String(bmp.readTemperature());
+  float pressureValue = bmp.readPressure();
+  float new_pressure = 0.968 * pressureValue + 2287.2;
+  pressure = String(new_pressure);
+  
+  float alt = bmp.readAltitude(1011.9);
+  float new_alt = 1.48 * alt - 1071.9;
+  altitude = String(new_alt);
+}
+
+void gpsRead() {
+  i=0;
+  altitudegps = String(gps.altitude.meters());
+  lat = String(gps.location.lat(), 6);
+  lon = String(gps.location.lng(), 6);
 }
 
 void loop() {
-  while (serial_connection.available()) {
+  now = millis();
+  while (serial_connection.available())
     gps.encode(serial_connection.read());
-  }
 
-  // BMP280 readings
-  bmp.getMeasurements(temperature, pressure, altitude);
-  Serial.print("BMP280 - Temperature: ");
-  Serial.println(temperature);
-  Serial.print("Pressure: ");
-  Serial.println(pressure);
-  Serial.print("Altitude: ");
-  Serial.println(altitude);
-
-  // HMC5883L readings
-  int x, y, z;
-  qmc.read(&x, &y, &z);
-  Serial.print("HMC5883L - Mx: ");
-  Serial.print(x);
-  Serial.print(" My: ");
-  Serial.print(y);
-  Serial.print(" Mz: ");
-  Serial.println(z);
-
-  // MPU6050 readings
-  sensors_event_t a, g, temp;
-  mpu.getEvent(&a, &g, &temp);
-  Serial.print("MPU6050 - Acceleration X: ");
-  Serial.print(a.acceleration.x);
-  Serial.print(", Y: ");
-  Serial.print(a.acceleration.y);
-  Serial.print(", Z: ");
-  Serial.print(a.acceleration.z);
-  Serial.println(" m/s^2");
-
-  Serial.print("Rotation X: ");
-  Serial.print(g.gyro.x);
-  Serial.print(", Y: ");
-  Serial.print(g.gyro.y);
-  Serial.print(", Z: ");
-  Serial.print(g.gyro.z);
-  Serial.println(" rad/s");
-
-  Serial.print("Temperature: ");
-  Serial.print(temp.temperature);
-  Serial.println(" degC");
-
-  // GPS readings
-  if (gps.location.isUpdated()) {
-    i=0;
-    Serial.print("GPS - Satellite: ");
-    Serial.println(gps.satellites.value());
-    Serial.print("Lat: ");
-    Serial.print(gps.location.lat(), 6);
-    Serial.print(", Lon: ");
-    Serial.println(gps.location.lng(), 6);
-    Serial.print("Speed MPH: ");
-    Serial.println(gps.speed.mph());
-    Serial.print("Altitude meter: ");
-    Serial.println(gps.altitude.meters());
-    Serial.println("-------------------------");
-  } else {
-    if (millis() - lastConnectionTime >= connectionInterval) {
+  if (gps.location.isUpdated()) gpsRead();
+  else {
+    if (now - lastConnectionTime >= connectionInterval) {
       i++;
-      Serial.println("GPS Connecting... ("+String(i)+")");
-      lastConnectionTime = millis(); // Update the last connection time
+      if (i != 1) Serial.println("GPS connecting... (" + String(i) + ")");
+
+      barometerRead();
+      magnetometerRead();
+      accelerometerRead();
+
+      data = String(now) + SEP +
+             accx + SEP + accy + SEP + accz + SEP + roll + SEP + yaw + SEP + pitch + SEP + // accelerometer
+             rollg + SEP + yawg + SEP + pitchg + SEP +
+             temperature + SEP + pressure + SEP + altitude + SEP +
+             altitudegps + SEP + lat + SEP + lon;
+
+      lastConnectionTime = now;
+      Serial.println(data);
     }
   }
 
-  Serial.println("");
-  delay(500);
+  // datos listos
+  
 }
