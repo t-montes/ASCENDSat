@@ -29,6 +29,10 @@ int AccCalibrationNumber;
 float AccX, AccY, AccZ;
 float AccXCalibration, AccYCalibration, AccZCalibration;
 float AngleRoll, AnglePitch, AngleYaw;
+const int pinvolt= 34; // Pin analógico al que está conectado el sensor de luz
+float vout;
+float value;
+float valor;
 
 int mx_bias=-287;
 int my_bias=239;
@@ -67,7 +71,20 @@ void setup() {
   Wire.write(0x6B);
   Wire.write(0x00);
   Wire.endTransmission();
+
+  pinMode(pinvolt, INPUT);
+
+  float altura_inicial
+  float altura_acumulada
+    for (int i = 0; i < 5; i++) {
+      barometerRead();
+      altura_inicial = float(new_alt);
+      altura_acumulada += new_alt;
+      delay(100);
+    }
+  altura_inicial = altura_inicial/5
 }
+  
 
 void accelerometerRead(){
   Wire.beginTransmission(0x68);
@@ -160,6 +177,12 @@ void gpsRead() {
   lon = String(gps.location.lng(), 6);
 }
 
+void voltRead() {
+ value = analogRead(pinvolt);
+ valor = value*3.13/4095;
+ vbat = String(0.4 + valor*(9872+1000)/9872);
+}
+
 void loop() {
   now = millis();
   while (serial_connection.available())
@@ -174,18 +197,24 @@ void loop() {
       barometerRead();
       magnetometerRead();
       accelerometerRead();
+      voltRead();
 
       data = String(now) + SEP +
-             accx + SEP + accy + SEP + accz + SEP + roll + SEP + yaw + SEP + pitch + SEP + // accelerometer
+             accx + SEP + accy + SEP + accz + SEP + roll + SEP + yaw + SEP + pitch + SEP +
              rollg + SEP + yawg + SEP + pitchg + SEP +
              temperature + SEP + pressure + SEP + altitude + SEP +
-             altitudegps + SEP + lat + SEP + lon;
+             altitudegps + SEP + lat + SEP + lon + SEP + 
+             camera + SEP + vbat + SEP + vpv;
 
       lastConnectionTime = now;
       Serial.println(data);
     }
   }
 
-  // datos listos
-  
+  if (abs(float(alt) - faltura_inicial) > 100) {
+    // activar servo
+    digitalWrite(pinOutput, HIGH);
+  } else {
+    digitalWrite(pinOutput, LOW);
+  }
 }
